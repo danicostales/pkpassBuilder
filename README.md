@@ -1,89 +1,133 @@
-# pkpassBuilder — Generador de Apple Wallet Passes
+# pkpassBuilder
 
-Generador de passkits (.pkpass) para eventos, compatible con Apple Wallet. Permite crear pases personalizados con códigos QR, información del evento y diseño configurable.
+Generador de passkits (.pkpass) para Apple Wallet. Automatiza la creación de entradas digitales con códigos QR a partir de un simple JSON.
 
-## Características principales
+## ¿Para qué sirve?
 
-- Diseño personalizable (colores, iconos, logos y banners)
-- Compatible con Apple Wallet (.pkpass)
-- Firma con certificados de Apple Developer
-- Soporte de geolocalización y fechas de evento
-- Generación de códigos QR por participante
-- Conversión opcional de SVG a PNG (requiere cairosvg)
+A todo el mundo le gusta la comodidad de las entradas digitales, pero lo que es un dolor de cabeza es el proceso de creación de los mismos. Este proyecto automatiza el flujo:
 
-## Requisitos previos
+1. Lee una lista de asistentes desde un JSON
+2. Genera un código QR correspondiente a un campo del json (ej. email)
+3. Crea un pase de Apple Wallet (.pkpass) con la información personalizada
+4. Guarda todos los archovos correctamente firmados y listos para distribuir
 
-### 1. Cuenta de Apple Developer
-Necesitas una cuenta de Apple Developer (99€/año o gratis en determinados casos [ver fee waivers](https://developer.apple.com/help/account/membership/fee-waivers/)) para obtener los certificados necesarios.
+Ideal para eventos, conferencias, hackatones...
 
-### 2. Certificados requeridos
+## Lo que necesitas antes de empezar
 
-#### a) Pass Type ID Certificate (`.p12`)
-1. Ve a [Apple Developer Certificates](https://developer.apple.com/account/resources/certificates/list)
-2. Crea un nuevo certificado de tipo "Pass Type ID Certificate"
-3. Descarga el certificado y ábrelo en Keychain Access
-4. Exporta como `.p12` con contraseña
+### Cuenta de Apple Developer
 
-#### b) WWDR Certificate (`.cer`)
-- Descarga el [Apple Worldwide Developer Relations (WWDR) Certificate](https://www.apple.com/certificateauthority/)
-- Usa el certificado G4: `AppleWWDRCAG4.cer`
+Necesitas estar suscrito al [Apple Developer Program](https://developer.apple.com/programs/) (99€/año). Sin esto no hay certificados para firmar los pases, y ni Apple Wallet, ni la mayoría de aplicaciones de cartera compatibles con `.pkpass` aceptarán tus pases.
 
-### 3. Pass Type Identifier
-1. Ve a [Identifiers](https://developer.apple.com/account/resources/identifiers/list/passTypeId)
-2. Crea un nuevo Pass Type ID (ej: `pass.com.tuorganizacion.evento`)
-3. Anota el Team ID (aparece en tu cuenta de desarrollador)
+Pro tip: Si tu organización califica, hay [fee waivers](https://developer.apple.com/help/account/membership/fee-waivers/) (ONG, administraciones públicas, centros educativos, etc.).
 
-## 🚀 Instalación
+### Certificados
 
-### 1. Clonar el repositorio
+Vas a necesitar dos archivos:
+
+**1. Pass Type ID Certificate (`.p12`)**
+- Tu certificado para firmar los pases
+- Lo creas en [Apple Developer](https://developer.apple.com/account/resources/certificates/list)
+- Tipo: "Pass Type ID Certificate"
+- Lo exportas desde Keychain Access como `.p12` con contraseña
+
+**2. WWDR Certificate (`.cer`)**
+- Certificado intermedio de Apple
+- Lo bajas de [aquí](https://www.apple.com/certificateauthority/)
+- Usa el G4: `AppleWWDRCAG4.cer`
+
+**3. Pass Type Identifier**
+- Lo creas en [Identifiers](https://developer.apple.com/account/resources/identifiers/list/passTypeId)
+- Algo como `pass.com.tuorg.evento`
+- También necesitas tu Team ID (lo ves en tu cuenta)
+
+Más detalles en [assets/cert/README.md](assets/cert/README.md).
+
+## Instalación
+
 ```bash
-git clone <tu-repositorio>
+git clone https://github.com/danicallero/pkpassBuilder
 cd pkpassBuilder
-```
 
-### 2. Crear entorno virtual (recomendado)
-```bash
+# Entorno virtual (recomendado)
 python3 -m venv venv
 source venv/bin/activate
-```
 
-### 3. Instalar dependencias
-```bash
+# Dependencias
 pip install -r requirements.txt
 ```
 
-### 4. Configurar certificados
-```bash
-# Copiar tus certificados
-cp /ruta/a/tu/Passkit.p12 assets/cert/
-cp /ruta/a/AppleWWDRCAG4.cer assets/cert/
-```
+## Configuración
 
-### 5. Configurar variables de entorno
-```bash
-# Copiar el archivo de ejemplo
-cp .env.example .env
+### 1. Certificados
 
-# Editar .env con tus valores
-nano .env
-```
+Pon tus certificados en `assets/cert/`
 
-Configuración del `.env`:
+### 2. Variables de entorno
+
+Crea un `.env` en la raíz:
+
 ```bash
-# Apple Developer Account
+# Apple Developer
 PASSKIT_TEAM_ID=TU_TEAM_ID
-PASSKIT_PASS_TYPE_ID=pass.com.tuorganizacion.evento
+PASSKIT_PASS_TYPE_ID=pass.com.tuorg.evento
 
-# Certificados (rutas relativas al proyecto)
+# Certificados
 PASSKIT_CERT_P12_PATH=assets/cert/Passkit.p12
-PASSKIT_CERT_P12_PASSWORD=tu_password_del_p12
+PASSKIT_CERT_P12_PASSWORD=tu_contraseña
 PASSKIT_WWDR_CERT_PATH=assets/cert/AppleWWDRCAG4.cer
+
+# Fecha del evento (opcional, se puede cambiar en generate.py)
+FECHA_INICIO_EVENTO=2026-02-27T17:30:00
 ```
+
+### 3. Personalizar el evento
+
+Edita `src/pkpass_builder/generate.py`:
+
+```python
+# Información del evento
+PASSKIT_EVENT = {
+    "ORG": "GPUL - HackUDC",
+    "NAME": "HackUDC 2026",
+    "DESC": "Pase de acceso a HackUDC 2026",
+    "DATE": datetime(2026, 2, 27, 17, 30),
+    "LOCATION": {
+        "latitude": 43.3332,
+        "longitude": -8.4115,
+        "relevantText": "Presenta este pase en la entrada del evento.",
+    },
+}
+
+# Colores y diseño
+PASSKIT_STYLE = {
+    "FG_COLOR": "rgb(255, 255, 255)",
+    "BG_COLOR": "rgb(40, 40, 40)",
+    "LABEL_COLOR": "rgb(255, 180, 0)",
+    "ICON": BASE_DIR / "assets" / "img" / "icon.png",
+    "LOGO": BASE_DIR / "assets" / "img" / "logo_w@2x.png",
+    "STRIP": BASE_DIR / "assets" / "img" / "strip.png",
+}
+
+# Campos que aparecen en el pase
+PASSKIT_FIELDS = {
+    "header": [...],
+    "secondary": [
+        {"key": "name", "label": "Nombre", "value": "{nombre}"},
+        {"key": "role", "label": "Rol", "value": "{rol}"},
+    ],
+    "auxiliary": [...],
+    "back": [...]
+}
+```
+
+Placeholders disponibles: `{nombre}`, `{correo}`, `{rol}`, `{dni}`, `{hora}`, `{fecha_corta}`
 
 ## Uso
 
-### 1. Preparar datos de participantes
-Crea un archivo JSON con la información de los participantes:
+### 1. Prepara tus datos
+
+Crea un JSON tipo `personas.json`:
 
 ```json
 [
@@ -96,177 +140,106 @@ Crea un archivo JSON con la información de los participantes:
     {
         "correo": "maria@example.com",
         "nombre": "María García",
-        "acreditacion": "XYZ789",
+        "acreditacion": null,
         "rol": "Mentor"
     }
 ]
 ```
 
-### 2. Ejecutar el generador
-```bash
-# Opción 1 (compatibilidad):
-python generar_passkits.py personas.json
+### 2. Genera los pases
 
-# Opción 2 (módulo):
+```bash
+python generar_pases.py personas.json
+```
+
+o usando el módulo:
+
+```bash
 python -m pkpass_builder personas.json
 ```
 
-### 3. Resultado
-Los archivos generados estarán en:
-- `output/*.pkpass` - Archivos de pases para Apple Wallet
-- `output/qr/*.png` - Códigos QR individuales
+### 3. Recoge los archivos
 
-## ⚙️ Configuración del Evento
+Se guardan en:
+- `output/*.pkpass` - Los pases
+- `output/qr/*.png` - QR codes individuales
 
-Edita el archivo `generar_passkits.py` para personalizar tu evento:
+## Imágenes
 
-### Información del Evento
-```python
-PASSKIT_EVENT = {
-    "ORG": "Tu Organización",
-    "NAME": "Nombre del Evento",
-    "DESC": "Descripción del pase",
-    "DATE": datetime(2026, 2, 27, 17, 30),  # Fecha del evento
-    "LOCATION": {
-        "latitude": 43.3332,
-        "longitude": -8.4115,
-        "relevantText": "Presenta este pase en la entrada."
-    }
-}
-```
+El script redimensiona automáticamente para que las imágenes no aparezcan pixeladas, pero estas son las medidas ideales:
 
-### Diseño Visual
-```python
-PASSKIT_STYLE = {
-    "FG_COLOR": "rgb(255, 255, 255)",      # Color del texto
-    "BG_COLOR": "rgb(40, 40, 40)",         # Color de fondo
-    "LABEL_COLOR": "rgb(255, 255, 255)",   # Color de las etiquetas
-    "ICON": "ruta/al/icono.png",           # Icono (PNG o URL a SVG)
-    "LOGO": "ruta/al/logo.png",            # Logo
-    "STRIP": "ruta/al/banner.png",         # Banner (opcional)
-}
-```
+| Asset | @2x | @1x | 
+|-------|-----|-----|
+| Icon  | 58x58 | 29x29 |
+| Logo  | 320x100 | 160x50 |
+| Strip | 1125x369 | 375x123 |
 
-### Campos del Pase
-```python
-PASSKIT_FIELDS = {
-    "header": [{"key": "hour", "label": "Hora", "value": "{hora}"}],
-    "primary": [],  # Campo principal grande
-    "secondary": [
-        {"key": "name", "label": "Nombre", "value": "{nombre}"},
-        {"key": "role", "label": "Rol", "value": "{rol}"},
-    ],
-    "auxiliary": [
-        {"key": "email", "label": "Correo", "value": "{correo}"}
-    ],
-    "back": [  # Información en la parte trasera
-        {"key": "web", "label": "Web", "value": "https://tuevento.com"}
-    ]
-}
-```
+Pon tus imágenes en `assets/img/`. Soporta PNG y SVG (este último necesita `cairosvg`).
 
-#### Placeholders disponibles:
-- `{nombre}` - Nombre del participante
-- `{correo}` - Correo electrónico
-- `{rol}` - Rol (Hacker, Mentor, etc.)
-- `{dni}` - DNI (si está disponible)
-- `{fecha}` - Fecha del evento (DD-MM-YYYY)
-- `{hora}` - Hora del evento (HH:MM)
-- `{fecha_completa}` - Fecha completa formateada
+## Problemas comunes
 
-## Dimensiones de imágenes
+**Error: "Certificado P12 no configurado"**
+→ Revisa la ruta en `.env` y que el archivo exista
 
-Para mejores resultados, usa estas dimensiones:
+**Error: "No se pudieron extraer los certificados"**
+→ Contraseña incorrecta o el P12 está corrupto. Expórtalo de nuevo.
 
-| Asset | Dimensión @2x | Dimensión @1x | Formato |
-|-------|---------------|---------------|---------|
-| Icon  | 58x58 px      | 29x29 px      | PNG     |
-| Logo  | 320x100 px    | 160x50 px     | PNG     |
-| Strip | 1125x369 px   | 375x123 px    | PNG     |
+**El pase no se abre en el iPhone**
+→ Comprueba que el Pass Type ID y Team ID sean correctos, y que los certificados no hayan expirado
 
-**Nota**: El script redimensiona automáticamente las imágenes, pero usar las dimensiones correctas mejora la calidad.
+**Error con SVG**
+→ Instala `pip install cairosvg` o usa PNG directamente
 
-## Solución de problemas
-
-### Error: "Certificado P12 no configurado"
-- Verifica que la ruta en `.env` sea correcta
-- Asegúrate de que el archivo `.p12` exista en la ruta especificada
-
-### Error: "No se pudieron extraer los certificados del P12"
-- Verifica que la contraseña del P12 sea correcta
-- Intenta exportar el certificado de nuevo desde Keychain Access
-
-### Error al cargar SVG
-- Asegúrate de tener instalado `cairosvg`: `pip install cairosvg`
-- O usa imágenes PNG en lugar de SVG
-
-### Los pases no se abren en iPhone
-- Verifica que el `Pass Type ID` y `Team ID` sean correctos
-- Asegúrate de que los certificados no hayan expirado
-- Verifica que el certificado WWDR sea el correcto (G4)
-
-## Estructura del proyecto
+## Estructura
 
 ```
 pkpassBuilder/
-├── pyproject.toml           # Configuración del proyecto
+├── generar_pases.py         
 ├── src/
-│   └── pkpass_builder/      # Código fuente del paquete
-│       ├── __init__.py
-│       └── generate.py
-├── examples/                # Ejemplos de entrada
+│   └── pkpass_builder/      # Módulo principal
+│       ├── generate.py      # Generador de pases
+│       └── __main__.py
+├── examples/
 │   └── ejemplo_personas.json
-├── staticfiles/             # Assets, imágenes y certificados
-│   ├── cert/                # Certificados (no incluir en git)
-│   └── img/                 # Imágenes (logo, icono, banner)
-├── tests/                   # Tests automatizados
-│   └── test_import.py
-├── output/                  # Passkits generados (no incluir en git)
-└── README.md
-```
-    └── qr/*.png
+├── assets/
+│   ├── cert/                # Certificados (NO SUBIR A GIT)
+│   └── img/                 # Imágenes (logo, icono, strip)
+├── output/                  # Pases generados
+│   └── qr/
+└── tests/
 ```
 
 ## Seguridad
 
-**IMPORTANTE**: Nunca subas a git:
-- Archivos `.p12` (certificados)
-- Archivos `.cer` (certificados WWDR)
-- Archivo `.env` (contraseñas y credenciales)
-- Carpeta `output/` (datos de participantes)
+No subas a git:
+- `.p12` / `.cer` (certificados)
+- `.env` (contraseñas)
+- `output/` (datos de participantes)
 
-El `.gitignore` ya está configurado para proteger estos archivos.
+El `.gitignore` ya está configurado, pero ojo.
+
+## Contribuir
+
+Si quieres mejorar algo:
+
+1. Fork el repo
+2. Crea una rama (`git checkout -b feature/cosa-nueva`)
+3. Commitea (`git commit -m 'Añade cosa nueva'`)
+4. Push (`git push origin feature/cosa-nueva`)
+5. Abre un Pull Request
 
 ## Licencia
 
-Este proyecto está bajo la licencia especificada en el archivo [LICENSE](LICENSE).
+Ver [LICENSE](LICENSE).
 
-## Contribuciones
+## Créditos
 
-Las contribuciones son bienvenidas. Por favor:
-1. Haz fork del proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+Usa [wallet-py3k](https://github.com/devartis/passbook) para generar los passes.
 
-## 🙏 Créditos
-
-- Desarrollado por GPUL (ejemplo)
-- Usa [wallet-py3k](https://github.com/devartis/passbook) para la generación de passes
-- Documentación de Apple: [Wallet Developer Guide](https://developer.apple.com/wallet/)
-
-## Soporte
-
-Si tienes problemas o preguntas:
-- Abre un [Issue](../../issues) en GitHub
-- Consulta la [documentación oficial de Apple Wallet](https://developer.apple.com/documentation/walletpasses)
-- Para asuntos de seguridad, revisa `SECURITY.md`.
+Docs oficiales: [Apple Wallet Developer Guide](https://developer.apple.com/wallet/)
 
 ---
 
-## Mantenimiento y contacto
+Hecho con ❤️ por [@danicallero](https://github.com/danicallero)
 
-Mantenido por: Dani Callero <hola@danicallero.es>. Para preguntas generales o PRs, usa Issues; para reportes de seguridad, usa el canal indicado en `SECURITY.md`.
-
-**Nota**: Este proyecto es independiente y no está afiliado con Apple Inc.
+*Este proyecto no está afiliado con Apple Inc.*
