@@ -1,0 +1,20 @@
+[
+    {
+        "correo": "usuario1@example.com",
+        "nombre": "Juan Pérez García",
+        "acreditacion": "ABC123",
+        "rol": "Hacker"
+    },
+    {
+        "correo": "usuario2@example.com",
+        "nombre": "María López Martínez",
+        "acreditacion": "XYZ789",
+        "rol": "Mentor"
+    },
+    {
+        "correo": "usuario3@example.com",
+        "nombre": "Carlos Rodríguez Sánchez",
+        "acreditacion": null,
+        "rol": "Hacker"
+    }
+]

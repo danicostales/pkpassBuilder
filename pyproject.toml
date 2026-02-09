@@ -1,0 +1,23 @@
+[project]
+name = "pkpassBuilder"
+version = "0.1.0"
+description = "Generador de passkits (.pkpass) para Apple Wallet"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [ { name = "Dani Callero", email = "hola@danicallero.es" } ]
+requires-python = ">=3.11"
+
+[project.scripts]
+pkpass-builder = "pkpass_builder.generate:main"
+
+[tool.black]
+color = true
+safe = true
+extend-exclude = "( ^/manage.py | .+/migrations)"
+
+[tool.isort]
+skip_glob = [ "*/migrations" ]
+profile = "black"
+multi_line_output=3
+combine_as_imports=true
+combine_straight_imports=true

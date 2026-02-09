@@ -1,0 +1,89 @@
+# ============================================================================
+# ARCHIVOS SENSIBLES Y SECRETOS
+# ============================================================================
+# Variables de entorno con contraseñas y credenciales
+.env
+.env.local
+.env.*.local
+
+# Bases de datos
+db.sqlite3*
+*.db
+
+# Certificados de Apple (¡NUNCA subir a git!)
+staticfiles/cert/*.p12
+staticfiles/cert/*.cer
+staticfiles/cert/*.pem
+staticfiles/cert/*.key
+*.p12
+*.cer
+*.pem
+*.key
+
+# ============================================================================
+# ARCHIVOS GENERADOS
+# ============================================================================
+# Passkits generados (pueden contener datos personales)
+output/
+*.pkpass
+
+# Logs
+log/
+*.log
+
+# ============================================================================
+# PYTHON
+# ============================================================================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# ============================================================================
+# EDITORES E IDEs
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ============================================================================
+# OTROS
+# ============================================================================
+gunicorn.pid
+*.csv
+*.bak
+*.sublime-project
+*.sublim
+.pytest_cache/
+*.tox/
+.mypy_cache/e-workspace
+.coverage
+htmlcov/

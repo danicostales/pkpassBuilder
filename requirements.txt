@@ -1,0 +1,8 @@
+# Dependencias principales
+python-dotenv==1.1.1
+qrcode==8.2
+pillow==11.3.0
+wallet-py3k>=0.0.4
+
+# Conversión de SVG (opcional, solo si usas íconos SVG)
+cairosvg==2.7.1
