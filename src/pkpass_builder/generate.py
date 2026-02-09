@@ -18,13 +18,16 @@ from datetime import datetime
 # Cargar variables de entorno desde .env
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
     logging.getLogger(__name__).info("Variables de entorno cargadas desde .env")
 except Exception:
-    logging.getLogger(__name__).info("python-dotenv no disponible; usando variables de entorno del sistema")
+    logging.getLogger(__name__).info(
+        "python-dotenv no disponible; usando variables de entorno del sistema"
+    )
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format='%(message)s')
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 # Directorio base del proyecto (dos niveles arriba de este archivo => repo root)
@@ -48,30 +51,47 @@ PASSKIT_AUTH = {
 
 # --- Event Info ---
 PASSKIT_EVENT = {
-    "ORG": "pkpassBuilder Demo",
-    "NAME": "Demo Event",
-    "DESC": "Pase de acceso de ejemplo generado por pkpassBuilder",
+    "ORG": "GPUL - HackUDC",
+    "NAME": "HackUDC 2026",
+    "DESC": "Pase de acceso a HackUDC 2026",
     "DATE": datetime(2026, 2, 27, 17, 30),
     "LOCATION": {
         "latitude": 43.3332,
         "longitude": -8.4115,
-        "relevantText": "Presenta este pase en la entrada del evento."
-    }
+        "relevantText": "Presenta este pase en la entrada del evento.",
+    },
 }
+
+# Sobrescribir con fecha de .env si existe
+_fecha_evento = os.getenv("FECHA_INICIO_EVENTO")
+if _fecha_evento:
+    try:
+        PASSKIT_EVENT["DATE"] = datetime.fromisoformat(_fecha_evento)
+        logger.info(f"Fecha cargada desde .env: {PASSKIT_EVENT['DATE']}")
+    except Exception as e:
+        logger.warning(f"Error cargando fecha desde .env: {e}")
 
 # --- Visuals ---
 PASSKIT_STYLE = {
     "FG_COLOR": "rgb(255, 255, 255)",
     "BG_COLOR": "rgb(40, 40, 40)",
-    "LABEL_COLOR": "rgb(255, 255, 255)",
-    # Usa una ruta local por defecto; se puede reemplazar por URL a SVG/PNG
-    "ICON": BASE_DIR / "staticfiles" / "img" / "gpul.png",
-    "LOGO": BASE_DIR / "staticfiles" / "img" / "logo_w@2x.png",
+    "LABEL_COLOR": "rgb(255, 180, 0)",  # Ámbar
+    "ICON": BASE_DIR / "assets" / "img" / "icon.png",
+    "LOGO": BASE_DIR / "assets" / "img" / "logo_w@2x.png",
+    "STRIP": BASE_DIR / "assets" / "img" / "strip.png",
 }
 
 # --- Pass Fields Structure ---
 PASSKIT_FIELDS = {
-    "header": [{"key": "hour", "label": "{hora}", "value": "{fecha}"}],
+    "header": [
+        {"key": "spacer", "label": "", "value": ""},
+        {
+            "key": "when",
+            "label": "{hora}",
+            "value": "{fecha_corta}",
+            "textAlignment": "PKTextAlignmentRight",
+        },
+    ],
     "primary": [],
     "secondary": [
         {"key": "name", "label": "Nombre", "value": "{nombre}"},
@@ -80,25 +100,53 @@ PASSKIT_FIELDS = {
     "auxiliary": [{"key": "email", "label": "Correo", "value": "{correo}"}],
     "back": [
         {"key": "event_info", "label": "Evento", "value": PASSKIT_EVENT["NAME"]},
-        {"key": "loc", "label": "Ubicación", "value": "Facultade de Informática, UDC, A Coruña"},
-        {"key": "entry_info", "label": "Información de Entrada", "value": "Presenta este pase cuando hagas el check-in."},
-        {"key": "terms", "label": "Términos y Condiciones", "value": "https://example.com/terms"},
-        {"key": "web", "label": "Más Información", "value": "https://example.com"},
+        {
+            "key": "loc",
+            "label": "Ubicación",
+            "value": "Facultade de Informática, UDC, A Coruña",
+        },
+        {
+            "key": "entry_info",
+            "label": "Información de Entrada",
+            "value": "Presenta este pase cuando hagas el check-in.",
+        },
+        {
+            "key": "web",
+            "label": "Horario, retos y más",
+            "value": "https://live.hackudc.gpul.org",
+        },
+        {
+            "key": "web",
+            "label": "Términos y Condiciones",
+            "value": "https://hackudc.gpul.org/terms",
+        },
+        {
+            "key": "web",
+            "label": "Política de Privacidad",
+            "value": "https://hackudc.gpul.org/privacy",
+        },
+        {
+            "key": "web",
+            "label": "Código de Conducta",
+            "value": "https://hackudc.gpul.org/conduct",
+        },
         {"key": "org", "label": "Organizado por", "value": "GPUL"},
-    ]
+    ],
 }
 
 # --- Assets & Output ---
-PASSKIT_ASSETS_DIR = str(BASE_DIR / "staticfiles" / "img")
+PASSKIT_ASSETS_DIR = str(BASE_DIR / "assets" / "img")
 OUTPUT_DIR = BASE_DIR / "output"
 
 # ============================================================================
 # DATACLASSES
 # ============================================================================
 
+
 @dataclass
 class Persona:
     """Clase simple para representar una persona."""
+
     correo: str
     nombre: str
     acreditacion: str = None
@@ -111,58 +159,64 @@ class Persona:
 @dataclass
 class PassResult:
     """Resultado de la generación de un pase."""
+
     pkpass: bytes
     qr_png: bytes
     acreditacion: str = ""
 
 
-# ============================================================================
-# (Se mantienen el resto de funciones originales...)
-# Para mantener el historial y minimizar cambios, el resto del módulo está
-# basado en el código original. Se recomienda revisar y refactorizar en el futuro.
-# ============================================================================
+def build_substitution_context(persona: Persona) -> dict:
+    """Construye el diccionario de sustituciones para los campos del pase."""
+    role = persona.rol if persona.rol else "Hacker"
 
-# Para no duplicar demasiado aquí, importamos las funciones restantes desde el
-# script original si quedan disponibles. Si se desea, podemos consolidar todo
-# el código en este archivo en un paso posterior.
-
-# Intentar importar funciones auxiliares definidas en el archivo antiguo (si
-# existen). De lo contrario, se deja la implementación local mínima.
-try:
-    # Esto funciona si el antiguo generar_passkits.py todavía está en el repo root
-    from generar_passkits import build_substitution_context, process_fields
-except Exception:
-    # Implementaciones provisionales necesarias para que el módulo importe
-    def build_substitution_context(persona: Persona) -> dict:
-        role = persona.rol if persona.rol else "Hacker"
+    # Formatear fecha del evento
+    date_values = {"hora": "", "fecha_corta": ""}
+    if PASSKIT_EVENT.get("DATE"):
+        date = PASSKIT_EVENT["DATE"]
+        meses_abrev = [
+            "",
+            "ene",
+            "feb",
+            "mar",
+            "abr",
+            "may",
+            "jun",
+            "jul",
+            "ago",
+            "sept",
+            "oct",
+            "nov",
+            "dic",
+        ]
         date_values = {
-            "completa": "",
-            "hora": "",
-            "fecha": "",
-        }
-        return {
-            "{nombre}": persona.nombre,
-            "{correo}": persona.correo,
-            "{dni}": persona.dni or "",
-            "{rol}": role,
-            "{fecha_completa}": date_values["completa"],
-            "{hora}": date_values["hora"],
-            "{fecha}": date_values["fecha"],
+            "hora": date.strftime("%H:%M"),
+            "fecha_corta": f"{date.day:02d} {meses_abrev[date.month]}, {date.year}",
         }
 
-    def process_fields(fields_list: list, context: dict, area: str = "") -> list:
-        processed = []
-        for field in fields_list:
-            item = dict(field)
-            for key in ["value", "label"]:
-                value = str(item.get(key, ""))
-                for placeholder, real_value in context.items():
-                    value = value.replace(placeholder, str(real_value))
-                item[key] = value
-            if area == "back" and item.get("value", "").startswith("http"):
-                item["is_link"] = True
-            processed.append(item)
-        return processed
+    return {
+        "{nombre}": persona.nombre,
+        "{correo}": persona.correo,
+        "{dni}": persona.dni or "",
+        "{rol}": role,
+        "{hora}": date_values["hora"],
+        "{fecha_corta}": date_values["fecha_corta"],
+    }
+
+
+def process_fields(fields_list: list, context: dict, area: str = "") -> list:
+    """Procesa los campos del pase reemplazando los placeholders."""
+    processed = []
+    for field in fields_list:
+        item = dict(field)
+        for key in ["value", "label"]:
+            value = str(item.get(key, ""))
+            for placeholder, real_value in context.items():
+                value = value.replace(placeholder, str(real_value))
+            item[key] = value
+        if area == "back" and item.get("value", "").startswith("http"):
+            item["is_link"] = True
+        processed.append(item)
+    return processed
 
 
 def cargar_personas(json_file: str) -> list[Persona]:
@@ -170,19 +224,23 @@ def cargar_personas(json_file: str) -> list[Persona]:
         data = json.load(f)
     personas = []
     for item in data:
-        personas.append(Persona(
-            correo=item.get("correo"),
-            nombre=item.get("nombre"),
-            acreditacion=item.get("acreditacion"),
-            rol=item.get("rol", "Hacker"),
-            dni=item.get("dni", ""),
-            mentor=item.get("mentor", False),
-            patrocinador=item.get("patrocinador", False)
-        ))
+        personas.append(
+            Persona(
+                correo=item.get("correo"),
+                nombre=item.get("nombre"),
+                acreditacion=item.get("acreditacion"),
+                rol=item.get("rol", "Hacker"),
+                dni=item.get("dni", ""),
+                mentor=item.get("mentor", False),
+                patrocinador=item.get("patrocinador", False),
+            )
+        )
     return personas
 
 
-def extract_p12_certificates(p12_path: str | Path, password: str, tmp_dir: Path) -> tuple[str, str]:
+def extract_p12_certificates(
+    p12_path: str | Path, password: str, tmp_dir: Path
+) -> tuple[str, str]:
     """Extrae certificado y clave privada de un P12 a archivos PEM usando openssl.
 
     Args:
@@ -204,21 +262,35 @@ def extract_p12_certificates(p12_path: str | Path, password: str, tmp_dir: Path)
     cmd_base = ["openssl", "pkcs12", "-in", str(p12_path), "-passin", pass_arg]
 
     try:
-        subprocess.run(cmd_base + ["-clcerts", "-nokeys", "-out", str(cert_pem)],
-                      check=True, capture_output=True)
-        subprocess.run(cmd_base + ["-nocerts", "-nodes", "-out", str(key_pem)],
-                      check=True, capture_output=True)
+        subprocess.run(
+            cmd_base + ["-clcerts", "-nokeys", "-out", str(cert_pem)],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            cmd_base + ["-nocerts", "-nodes", "-out", str(key_pem)],
+            check=True,
+            capture_output=True,
+        )
     except subprocess.CalledProcessError:
         # Reintento con -legacy para versiones antiguas de OpenSSL
         try:
-            subprocess.run(cmd_base + ["-legacy", "-clcerts", "-nokeys", "-out", str(cert_pem)],
-                          check=True, capture_output=True)
-            subprocess.run(cmd_base + ["-legacy", "-nocerts", "-nodes", "-out", str(key_pem)],
-                          check=True, capture_output=True)
+            subprocess.run(
+                cmd_base + ["-legacy", "-clcerts", "-nokeys", "-out", str(cert_pem)],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                cmd_base + ["-legacy", "-nocerts", "-nodes", "-out", str(key_pem)],
+                check=True,
+                capture_output=True,
+            )
             logger.warning("Certificado extraído usando el flag -legacy de OpenSSL")
         except subprocess.CalledProcessError as e_legacy:
             logger.error(f"Error OpenSSL: {e_legacy.stderr.decode()}")
-            raise RuntimeError("No se pudieron extraer los certificados del P12. Revisa la contraseña.") from e_legacy
+            raise RuntimeError(
+                "No se pudieron extraer los certificados del P12. Revisa la contraseña."
+            ) from e_legacy
 
     return str(cert_pem), str(key_pem)
 
@@ -238,16 +310,27 @@ def ensure_wwdr_pem(wwdr_path: str | Path, tmp_dir: Path) -> str:
         raise FileNotFoundError(f"Certificado WWDR no encontrado: {wwdr_path}")
 
     # Si ya es PEM, retornar directamente
-    with open(wwdr_path, 'rb') as f:
-        if b'BEGIN CERTIFICATE' in f.read(100):
+    with open(wwdr_path, "rb") as f:
+        if b"BEGIN CERTIFICATE" in f.read(100):
             return str(wwdr_path)
 
     # Convertir de DER a PEM
     pem_path = tmp_dir / "wwdr.pem"
     try:
         subprocess.run(
-            ["openssl", "x509", "-inform", "DER", "-in", str(wwdr_path), "-out", str(pem_path)],
-            check=True, capture_output=True, text=True
+            [
+                "openssl",
+                "x509",
+                "-inform",
+                "DER",
+                "-in",
+                str(wwdr_path),
+                "-out",
+                str(pem_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
         )
         return str(pem_path)
     except subprocess.CalledProcessError as e:
@@ -264,11 +347,15 @@ def _resize_with_upscaling(img, target_size: int, sharpen: bool = True):
     upscale_factor = 4 if max_src < target_size * 2 else 2
     intermediate_size = (target_size * upscale_factor, target_size * upscale_factor)
 
-    img_high = ImageOps.fit(img, intermediate_size, Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+    img_high = ImageOps.fit(
+        img, intermediate_size, Image.Resampling.LANCZOS, centering=(0.5, 0.5)
+    )
     img_out = img_high.resize((target_size, target_size), Image.Resampling.LANCZOS)
 
     if sharpen:
-        img_out = img_out.filter(ImageFilter.UnsharpMask(radius=0.5, percent=80, threshold=1))
+        img_out = img_out.filter(
+            ImageFilter.UnsharpMask(radius=0.5, percent=80, threshold=1)
+        )
 
     return img_out
 
@@ -306,12 +393,14 @@ def _load_image_from_source(source: str | Path, fallback_dir: Path = None):
     if isinstance(source, str) and source.startswith("http"):
         try:
             import urllib.request
+
             resp = urllib.request.urlopen(source, timeout=10)
             data = resp.read()
 
-            if b"<svg" in data or source.lower().endswith('.svg'):
+            if b"<svg" in data or source.lower().endswith(".svg"):
                 try:
                     import cairosvg
+
                     png_bytes = cairosvg.svg2png(bytestring=data)
                     return Image.open(io.BytesIO(png_bytes)).convert("RGBA")
                 except Exception:
@@ -360,7 +449,9 @@ def _save_icon(icon_img, tmp_dir: Path):
         placeholder = Image.new("RGBA", (58, 58), (40, 40, 40, 255))
         placeholder = _apply_squircle(placeholder, 58, n=3.8)
         placeholder.save(tmp_dir / "icon@2x.png")
-        placeholder.resize((29, 29), Image.Resampling.LANCZOS).save(tmp_dir / "icon.png")
+        placeholder.resize((29, 29), Image.Resampling.LANCZOS).save(
+            tmp_dir / "icon.png"
+        )
         logger.warning("Se generó icono placeholder")
         return
 
@@ -425,8 +516,11 @@ def _save_strip(strip_path: str | Path, tmp_dir: Path):
         bottom = (new_h + target_h) / 2
 
         strip_final = img_resized.crop((left, top, right, bottom))
+
         strip_final.save(tmp_dir / "strip@2x.png")
-        strip_final.resize((375, 123), Image.Resampling.LANCZOS).save(tmp_dir / "strip.png")
+        strip_final.resize((375, 123), Image.Resampling.LANCZOS).save(
+            tmp_dir / "strip.png"
+        )
     except Exception as e:
         logger.exception(f"Error procesando strip: {e}")
 
@@ -462,7 +556,9 @@ def generate_pass(persona: Persona) -> PassResult:
     try:
         from wallet.models import Pass, Barcode, BarcodeFormat, EventTicket
     except ImportError:
-        raise RuntimeError("La librería 'wallet-py3k' no está instalada. Instala con: pip install wallet-py3k")
+        raise RuntimeError(
+            "La librería 'wallet-py3k' no está instalada. Instala con: pip install wallet-py3k"
+        )
 
     import qrcode
     from PIL import Image
@@ -490,7 +586,11 @@ def generate_pass(persona: Persona) -> PassResult:
             if hasattr(ticket, method_name):
                 method = getattr(ticket, method_name)
                 processed = process_fields(campos_config, context, area)
-                if area == "primary" and not processed and not PASSKIT_STYLE.get("STRIP"):
+                if (
+                    area == "primary"
+                    and not processed
+                    and not PASSKIT_STYLE.get("STRIP")
+                ):
                     method("placeholder", "", "")
                 for field in processed:
                     method(field["key"], field["value"], field["label"])
@@ -500,7 +600,7 @@ def generate_pass(persona: Persona) -> PassResult:
             ticket,
             passTypeIdentifier=PASSKIT_AUTH["PASS_TYPE_ID"],
             organizationName=PASSKIT_EVENT["ORG"],
-            teamIdentifier=PASSKIT_AUTH["TEAM_ID"]
+            teamIdentifier=PASSKIT_AUTH["TEAM_ID"],
         )
 
         pass_obj.serialNumber = persona.correo
@@ -510,11 +610,14 @@ def generate_pass(persona: Persona) -> PassResult:
         pass_obj.labelColor = PASSKIT_STYLE["LABEL_COLOR"]
         pass_obj.barcode = Barcode(message=persona.correo, format=BarcodeFormat.QR)
 
+        # Fecha y localización para que aparezca en pantalla de inicio
         if PASSKIT_EVENT.get("DATE"):
             from datetime import timezone, timedelta
+
             tz = timezone(timedelta(hours=1))
             date_with_tz = PASSKIT_EVENT["DATE"].replace(tzinfo=tz)
             pass_obj.relevantDate = date_with_tz.isoformat()
+
         if PASSKIT_EVENT.get("LOCATION"):
             pass_obj.locations = [PASSKIT_EVENT["LOCATION"]]
 
@@ -525,9 +628,7 @@ def generate_pass(persona: Persona) -> PassResult:
 
         # Firmar el pase
         cert_pem, key_pem = extract_p12_certificates(
-            PASSKIT_AUTH["P12_PATH"],
-            PASSKIT_AUTH["P12_PASSWORD"],
-            tmp_dir
+            PASSKIT_AUTH["P12_PATH"], PASSKIT_AUTH["P12_PASSWORD"], tmp_dir
         )
         wwdr_pem = ensure_wwdr_pem(PASSKIT_AUTH["WWDR_CERT"], tmp_dir)
 
@@ -545,7 +646,9 @@ def main():
     logger.info("pkpassBuilder - ejecución local")
 
     if len(sys.argv) < 2:
-        logger.info("Uso: python -m pkpass_builder <archivo.json>  (o: python generar_passkits.py <archivo.json>)")
+        logger.info(
+            "Uso: python -m pkpass_builder <archivo.json>  (o: python generar_passkits.py <archivo.json>)"
+        )
         sys.exit(1)
 
     json_file = sys.argv[1]
