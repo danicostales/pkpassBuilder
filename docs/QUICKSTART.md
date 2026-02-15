@@ -72,14 +72,25 @@ PASSKIT_WWDR_CERT_PATH=staticfiles/cert/AppleWWDRCAG4.cer
 ### 4️⃣ Generar tu Primer Pase (1 min)
 
 ```bash
-# Usar el archivo de ejemplo
+# Usar el archivo de ejemplo (modo entradas — usa el email como identificador)
 python generar_passkits.py ejemplo_personas.json  # o: python -m pkpass_builder ejemplo_personas.json
+
+# Usar el modo acreditación (genera solo badges para personas con `acreditacion`)
+python -m pkpass_builder --use-acreditacion ejemplo_personas.json
+
+# Generar entradas (modo por defecto) — genera `entradas` para todas las personas
+python -m pkpass_builder ejemplo_personas.json
+
+# Generar ambos (entradas + badges)
+python -m pkpass_builder --both ejemplo_personas.json
 
 # Verificar que se generó
 ls -la output/
+ls -la output/pass/entradas
+ls -la output/pass/badges
 ```
 
-¡Listo! Los archivos `.pkpass` están en `output/`
+¡Listo! Los archivos `.pkpass` están en `output/pass/entradas` o `output/pass/badges` según el modo. QR files en `output/qr/entradas` y `output/qr/badges`.
 
 ### 5️⃣ Probar en iPhone
 
@@ -135,6 +146,7 @@ Crea un archivo `mis_participantes.json`:
         "correo": "ana@ejemplo.com",
         "nombre": "Ana García",
         "acreditacion": "VIP001",
+        "token": "ana_vip001",
         "rol": "Speaker"
     },
     {
@@ -149,6 +161,9 @@ Crea un archivo `mis_participantes.json`:
 Genera los pases:
 ```bash
 python generar_passkits.py mis_participantes.json
+
+# Generar usando el campo `acreditacion` como identificador (serial/QR/fichero)
+python -m pkpass_builder --use-acreditacion mis_participantes.json
 ```
 
 ## ❓ Problemas Comunes

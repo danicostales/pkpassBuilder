@@ -121,7 +121,7 @@ PASSKIT_FIELDS = {
 }
 ```
 
-Placeholders disponibles: `{nombre}`, `{correo}`, `{rol}`, `{dni}`, `{hora}`, `{fecha_corta}`
+Placeholders disponibles: `{nombre}`, `{correo}`, `{acreditacion}`, `{token}`, `{rol}`, `{dni}`, `{hora}`, `{fecha_corta}`
 
 ## Uso
 
@@ -156,6 +156,9 @@ o usando el módulo:
 
 ```bash
 python -m pkpass_builder personas.json
+
+# Usar acreditación como identificador (serial/QR/fichero)
+python -m pkpass_builder --use-acreditacion personas.json
 ```
 
 ### 3. Recoge los archivos

@@ -3,12 +3,13 @@
         "correo": "usuario1@example.com",
         "nombre": "Juan Pérez García",
         "acreditacion": "ABC123",
+        "token": "juan_abc123",
         "rol": "Hacker"
     },
     {
-        "correo": "usuario2@example.com",
-        "nombre": "María López Martínez",
-        "acreditacion": "XYZ789",
+        "correo": "correo@example.com",
+        "nombre": "Lorem Ipsum",
+        "acreditacion": null,
         "rol": "Mentor"
     },
     {
@@ -16,5 +17,5 @@
         "nombre": "Carlos Rodríguez Sánchez",
         "acreditacion": null,
         "rol": "Hacker"
-    }
+    },
 ]

@@ -54,7 +54,7 @@ PASSKIT_EVENT = {
     "ORG": "GPUL - HackUDC",
     "NAME": "HackUDC 2026",
     "DESC": "Pase de acceso a HackUDC 2026",
-    "DATE": datetime(2026, 2, 27, 17, 30),
+    "DATE": datetime(2026, 2, 27, 17, 00),
     "LOCATION": {
         "latitude": 43.3332,
         "longitude": -8.4115,
@@ -150,6 +150,7 @@ class Persona:
     correo: str
     nombre: str
     acreditacion: str = None
+    token: str = None
     rol: str = "Hacker"
     dni: str = ""
     mentor: bool = False
@@ -196,6 +197,8 @@ def build_substitution_context(persona: Persona) -> dict:
     return {
         "{nombre}": persona.nombre,
         "{correo}": persona.correo,
+        "{acreditacion}": persona.acreditacion or "",
+        "{token}": persona.token or "",
         "{dni}": persona.dni or "",
         "{rol}": role,
         "{hora}": date_values["hora"],
@@ -229,6 +232,7 @@ def cargar_personas(json_file: str) -> list[Persona]:
                 correo=item.get("correo"),
                 nombre=item.get("nombre"),
                 acreditacion=item.get("acreditacion"),
+                token=item.get("token"),
                 rol=item.get("rol", "Hacker"),
                 dni=item.get("dni", ""),
                 mentor=item.get("mentor", False),
@@ -236,6 +240,18 @@ def cargar_personas(json_file: str) -> list[Persona]:
             )
         )
     return personas
+
+
+def should_process_persona(persona: Persona, use_acreditacion: bool) -> bool:
+    """Decide si debemos procesar una persona en el modo exclusivo.
+
+    - Si use_acreditacion == True -> generar SOLO badges (personas con `acreditacion`).
+    - Si use_acreditacion == False -> modo 'entradas' -> procesar TODAS las personas
+      (las entradas se generan para todos; las acreditaciones se ignoran).
+    """
+    if use_acreditacion:
+        return bool(persona.acreditacion)
+    return True
 
 
 def extract_p12_certificates(
@@ -541,11 +557,14 @@ def generate_pass_assets(tmp_dir: Path):
         _save_strip(strip_path, tmp_dir)
 
 
-def generate_pass(persona: Persona) -> PassResult:
+def generate_pass(persona: Persona, use_acreditacion: bool = False) -> PassResult:
     """Genera el archivo .pkpass y el QR para una Persona.
 
     Args:
         persona: Instancia de Persona para la cual generar el pase
+        use_acreditacion: Si es True, usa `persona.acreditacion` como identificador
+            (serialNumber, barcode, QR y nombre de fichero). Si no existe,
+            cae al `correo`.
 
     Returns:
         PassResult con pkpass (bytes), qr_png (bytes) y acreditacion (str)
@@ -565,23 +584,36 @@ def generate_pass(persona: Persona) -> PassResult:
 
     acreditacion = persona.acreditacion or ""
 
+    # Identificador que se usará para QR, serialNumber y nombre de fichero
+    id_value = persona.acreditacion if (use_acreditacion and persona.acreditacion) else persona.correo
+
     with tempfile.TemporaryDirectory() as tmp_str:
         tmp_dir = Path(tmp_str)
 
         # Generar assets (icono, logo, strip)
         generate_pass_assets(tmp_dir)
 
-        # Generar QR
+        # Generar QR (usa id_value en lugar de correo cuando corresponda)
         qr_buffer = io.BytesIO()
-        qrcode.make(persona.correo).save(qr_buffer, format="PNG")
+        qrcode.make(id_value).save(qr_buffer, format="PNG")
         qr_bytes = qr_buffer.getvalue()
 
         # Construir el pase
         ticket = EventTicket()
         context = build_substitution_context(persona)
 
+        # Preparar campos (posible inyección del campo 'acreditacion' cuando se use acreditación)
+        from copy import deepcopy
+
+        fields_to_use = deepcopy(PASSKIT_FIELDS)
+        if use_acreditacion and persona.acreditacion:
+            aux = fields_to_use.get("auxiliary", [])
+            if not any(f.get("key") == "acreditacion" for f in aux):
+                aux.append({"key": "acreditacion", "label": "Acreditación", "value": "{acreditacion}"})
+                fields_to_use["auxiliary"] = aux
+
         # Añadir campos procesados
-        for area, campos_config in PASSKIT_FIELDS.items():
+        for area, campos_config in fields_to_use.items():
             method_name = f"add{area.capitalize()}Field"
             if hasattr(ticket, method_name):
                 method = getattr(ticket, method_name)
@@ -594,7 +626,6 @@ def generate_pass(persona: Persona) -> PassResult:
                     method("placeholder", "", "")
                 for field in processed:
                     method(field["key"], field["value"], field["label"])
-
         # Configuración del pase
         pass_obj = Pass(
             ticket,
@@ -603,12 +634,13 @@ def generate_pass(persona: Persona) -> PassResult:
             teamIdentifier=PASSKIT_AUTH["TEAM_ID"],
         )
 
-        pass_obj.serialNumber = persona.correo
+        # usar id_value como serial y código de barras
+        pass_obj.serialNumber = id_value
         pass_obj.description = PASSKIT_EVENT["DESC"]
         pass_obj.foregroundColor = PASSKIT_STYLE["FG_COLOR"]
         pass_obj.backgroundColor = PASSKIT_STYLE["BG_COLOR"]
         pass_obj.labelColor = PASSKIT_STYLE["LABEL_COLOR"]
-        pass_obj.barcode = Barcode(message=persona.correo, format=BarcodeFormat.QR)
+        pass_obj.barcode = Barcode(message=id_value, format=BarcodeFormat.QR)
 
         # Fecha y localización para que aparezca en pantalla de inicio
         if PASSKIT_EVENT.get("DATE"):
@@ -645,13 +677,35 @@ def generate_pass(persona: Persona) -> PassResult:
 def main():
     logger.info("pkpassBuilder - ejecución local")
 
-    if len(sys.argv) < 2:
-        logger.info(
-            "Uso: python -m pkpass_builder <archivo.json>  (o: python generar_passkits.py <archivo.json>)"
-        )
-        sys.exit(1)
+    # CLI: aceptar flag --use-acreditacion para usar el campo `acreditacion`
+    import argparse
 
-    json_file = sys.argv[1]
+    parser = argparse.ArgumentParser(
+        prog="pkpass_builder",
+        description="Genera .pkpass y códigos QR desde un JSON de personas",
+    )
+    parser.add_argument("json_file", help="Fichero JSON con las personas")
+
+    # flags mutuamente excluyentes: --use-acreditacion o --both
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "-a",
+        "--use-acreditacion",
+        action="store_true",
+        help="Usar el campo 'acreditacion' como identificador (serial/QR/fichero) en lugar del correo",
+    )
+    group.add_argument(
+        "-b",
+        "--both",
+        action="store_true",
+        help="Generar BOTH: entradas (email) y badges (acreditación) en la misma ejecución",
+    )
+
+    args = parser.parse_args()
+
+    json_file = args.json_file
+    use_acreditacion = args.use_acreditacion
+    both_mode = args.both
 
     # Verificar configuración mínima
     if not PASSKIT_AUTH["P12_PATH"] or not Path(PASSKIT_AUTH["P12_PATH"]).exists():
@@ -672,24 +726,102 @@ def main():
 
     output_dir = Path(OUTPUT_DIR)
     output_dir.mkdir(exist_ok=True)
+
+    # Crear subcarpetas separadas para entradas (email) y badges (acreditación)
     (output_dir / "qr").mkdir(exist_ok=True)
+    (output_dir / "qr" / "entradas").mkdir(exist_ok=True)
+    (output_dir / "qr" / "badges").mkdir(exist_ok=True)
+
+    (output_dir / "pass").mkdir(exist_ok=True)
+    (output_dir / "pass" / "entradas").mkdir(exist_ok=True)
+    (output_dir / "pass" / "badges").mkdir(exist_ok=True)
 
     exitosos = 0
     fallidos = 0
 
+
+
+
     for i, persona in enumerate(personas, 1):
-        logger.info(f"[{i}/{len(personas)}] {persona.nombre} ({persona.correo})...")
+        # Modo BOTH: generar badge (si tiene acreditación) y/o entrada (si no tiene acreditación)
+        if both_mode:
+            # badges: solo si persona tiene acreditacion
+            if persona.acreditacion:
+                id_used = persona.acreditacion
+                logger.info(f"[{i}/{len(personas)}] {persona.nombre} (badge: {id_used})...")
+                try:
+                    result = generate_pass(persona, use_acreditacion=True)
+                    file_base = (
+                        str(persona.token) if persona.token else str(id_used)
+                    )
+                    file_base = file_base.replace("@", "_").replace(".", "_").replace("/", "_").replace(" ", "_")
+                    pkpass_path = output_dir / "pass" / "badges" / f"{file_base}.pkpass"
+                    pkpass_path.write_bytes(result.pkpass)
+                    qr_path = output_dir / "qr" / "badges" / f"{file_base}.png"
+                    qr_path.write_bytes(result.qr_png)
+                    logger.info("Generado badge — fichero: %s", pkpass_path.name)
+                    exitosos += 1
+                except Exception:
+                    logger.exception("Error generando badge para %s", id_used)
+                    fallidos += 1
+
+            # entradas: generar siempre (también para personas con acreditacion)
+            id_used = persona.correo
+            logger.info(f"[{i}/{len(personas)}] {persona.nombre} (entrada: {id_used})...")
+            try:
+                result = generate_pass(persona, use_acreditacion=False)
+                file_base = (
+                    str(persona.token) if persona.token else str(id_used)
+                )
+                file_base = file_base.replace("@", "_").replace(".", "_").replace("/", "_").replace(" ", "_")
+                pkpass_path = output_dir / "pass" / "entradas" / f"{file_base}.pkpass"
+                pkpass_path.write_bytes(result.pkpass)
+                qr_path = output_dir / "qr" / "entradas" / f"{file_base}.png"
+                qr_path.write_bytes(result.qr_png)
+                logger.info("Generado entrada — fichero: %s", pkpass_path.name)
+                exitosos += 1
+            except Exception:
+                logger.exception("Error generando entrada para %s", id_used)
+                fallidos += 1
+
+            # continuar al siguiente persona
+            continue
+
+        # Modo exclusivo (como antes)
+        if not should_process_persona(persona, use_acreditacion):
+            logger.info(
+                "[SKIP] %s — modo: %s — (acreditacion: %s)",
+                persona.nombre,
+                "acreditacion" if use_acreditacion else "entrada",
+                persona.acreditacion,
+            )
+            continue
+
+        id_used = persona.acreditacion if (use_acreditacion and persona.acreditacion) else persona.correo
+        logger.info(f"[{i}/{len(personas)}] {persona.nombre} ({id_used})...")
         try:
-            result = generate_pass(persona)
-            safe_email = persona.correo.replace("@", "_").replace(".", "_")
-            pkpass_path = output_dir / f"{safe_email}.pkpass"
+            result = generate_pass(persona, use_acreditacion=use_acreditacion)
+
+            # Si el JSON incluye `token`, usarlo como nombre base del fichero (sanitizado)
+            if persona.token:
+                file_base = (
+                    str(persona.token).replace("@", "_").replace("/", "_").replace(" ", "_")
+                )
+            else:
+                file_base = (
+                    str(id_used).replace("@", "_").replace(".", "_").replace(" ", "_")
+                )
+
+            # Guardar en subcarpeta correspondiente
+            subfolder = "badges" if use_acreditacion else "entradas"
+            pkpass_path = output_dir / "pass" / subfolder / f"{file_base}.pkpass"
             pkpass_path.write_bytes(result.pkpass)
-            qr_path = output_dir / "qr" / f"{safe_email}.png"
+            qr_path = output_dir / "qr" / subfolder / f"{file_base}.png"
             qr_path.write_bytes(result.qr_png)
-            logger.info("Generado")
+            logger.info("Generado — fichero: %s", pkpass_path.name)
             exitosos += 1
         except Exception:
-            logger.exception("Error generando pase para %s", persona.correo)
+            logger.exception("Error generando pase para %s", id_used)
             fallidos += 1
 
     logger.info("=" * 50)
